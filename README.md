@@ -12,7 +12,7 @@ a plane with parameterization:
 
 The points that belong to the road deviate from the model by no more 
 than a specified value `p`.
-It is necessary to find the parameters `A`, `B`, `C`, and D of the plane
+It is necessary to find the parameters `A`, `B`, `C`, and `D` of the plane
  corresponding to the road. The number of points deviating 
 from the model by no more than p must be at least 50% of the total 
 number of points.
