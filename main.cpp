@@ -4,7 +4,6 @@
 #include <vector>
 #include <cmath>
 #include <random>
-#include <algorithm>
 
 using namespace std;
 
@@ -74,45 +73,72 @@ public:
     }
 };
 
-
 float point_to_plane_distance(const Point3D& point, const Plane3D& plane) {
     return fabs(plane.a * point.x + plane.b * point.y + plane.c * point.z + plane.d) /
            (sqrt(plane.a * plane.a + plane.b * plane.b + plane.c * plane.c));
 }
 
+class PlaneFitter {
+public:
+    virtual Plane3D fit(const vector<Point3D>& point_cloud, float p) = 0;
+};
 
-// Random sample consensus (RANSAC) algorithm
-Plane3D fit_plane(const vector<Point3D>& point_cloud, float p) {
-    std::random_device rd;
-    std::mt19937 mt(rd());
-    std::uniform_int_distribution<int> dist(0, point_cloud.size() - 1);
-    // todo: pointers?
-    vector<Point3D> consensus_set;
-    vector<Point3D> best_consensus_set;
-    int k = 100;
-    int number_of_possible_planes = 0;
-    Plane3D result_plane;
-    for (int i = 0; i < k; i++) {
-        Plane3D sample_plane = Plane3D(point_cloud[dist(mt)], point_cloud[dist(mt)], point_cloud[dist(mt)]);
-        for (auto j : point_cloud) {
-            if (point_to_plane_distance(j, sample_plane) < p) {
-                consensus_set.push_back(j);
+class RansacPlaneFitter : public PlaneFitter {
+public:
+    Plane3D fit(const vector<Point3D>& point_cloud, float p) override {
+        std::random_device rd;
+        std::mt19937 mt(rd());
+        std::uniform_int_distribution<int> dist(0, point_cloud.size() - 1);
+        vector<Point3D> consensus_set;
+        vector<Point3D> best_consensus_set;
+        int k = 100;
+        int number_of_possible_planes = 0;
+        Plane3D result_plane;
+        for (int i = 0; i < k; i++) {
+            Plane3D sample_plane = Plane3D(point_cloud[dist(mt)], point_cloud[dist(mt)], point_cloud[dist(mt)]);
+            for (auto j : point_cloud) {
+                if (point_to_plane_distance(j, sample_plane) < p) {
+                    consensus_set.push_back(j);
+                }
+            }
+            if (consensus_set.size() > best_consensus_set.size()) {
+                best_consensus_set = consensus_set;
+                result_plane = sample_plane;
+            }
+            if (consensus_set.size() > point_cloud.size() / 2) {
+                number_of_possible_planes++;
+            }
+            consensus_set.clear();
+        }
+        return result_plane;
+    }
+};
+
+class HoughTransformPlaneFitter : public PlaneFitter {
+public:
+    HoughTransformPlaneFitter() {}
+
+    Plane3D fit(const vector<Point3D>& point_cloud, float p) override {
+        for (int i = 0; i < point_cloud.size(); i++) {
+            for (int j = 0; j < N; j++) {
+                for (int k = 0; k < N; k++) {
+                    Point3D point = point_cloud[i];
+                    float theta = j * (2 * M_PI / N);
+                    float phi = k * (M_PI / N);
+                    float rho = point.x * cos(theta) * sin(phi) + point.y * sin(theta) * sin(phi) + point.x * cos(phi);
+                    int rhoIndex = (int) (rho / N);
+                    accumulator[j][k][rhoIndex]++;
+                }
             }
         }
-        if (consensus_set.size() > best_consensus_set.size()) {
-            best_consensus_set = consensus_set;
-            result_plane = sample_plane;
-        }
-        if (consensus_set.size() > point_cloud.size() / 2) {
-            number_of_possible_planes++;
-        }
-        consensus_set.clear();
+        return Plane3D();
     }
-    // todo: need to average best fitting plane
-    cout << "number of possible planes = " << number_of_possible_planes << endl;
-    cout << "max consensus set size = " << best_consensus_set.size() << endl;
-    return result_plane;
-}
+
+private:
+    static const int N = 200;
+    // theta (0 <= theta <= 2pi), phi (0 <= phi <= pi), rho (rho <= abs(sqrt(100^2+100^2+100^2)))
+    int accumulator[N][N][N];
+};
 
 int main() {
     string line;
@@ -130,7 +156,8 @@ int main() {
             points >> x; points >> y; points >> z;
             point_cloud.emplace_back(x, y, z);
         }
-        Plane3D plane = fit_plane(point_cloud, p);
+        RansacPlaneFitter planeFitter;
+        Plane3D plane = planeFitter.fit(point_cloud, p);
         plane.print();
         input.close();
     } else {
