@@ -3,6 +3,7 @@
 #include <sstream>
 #include <vector>
 #include <cmath>
+#include <string>
 #include <random>
 
 using namespace std;
@@ -125,19 +126,32 @@ public:
                     Point3D point = point_cloud[i];
                     float theta = j * (2 * M_PI / N);
                     float phi = k * (M_PI / N);
-                    float rho = point.x * cos(theta) * sin(phi) + point.y * sin(theta) * sin(phi) + point.x * cos(phi);
-                    int rhoIndex = (int) (rho / N);
+                    float rho = point.x * cos(theta) * sin(phi) + point.y * sin(theta) * sin(phi) + point.z * cos(phi);
+                    int rhoIndex = (int) (fabs((rho / MAX_RHO) * N));
                     accumulator[j][k][rhoIndex]++;
                 }
             }
         }
+        int max = 0;
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) {
+                for (int k = 0; k < N; k++) {
+                    if (accumulator[i][j][k] > max) {
+                        max = accumulator[i][j][k];
+                    }
+                }
+            }
+        }
+        cout << max << endl;
         return Plane3D();
     }
 
 private:
-    static const int N = 200;
+    // todo: different N for different params?
+    static const int N = 120;
+    static constexpr float MAX_RHO = sqrt(100 * 100 + 100 * 100 + 100 * 100);
     // theta (0 <= theta <= 2pi), phi (0 <= phi <= pi), rho (rho <= abs(sqrt(100^2+100^2+100^2)))
-    int accumulator[N][N][N];
+    int accumulator[N][N][N] = {0};
 };
 
 int main() {
@@ -156,7 +170,8 @@ int main() {
             points >> x; points >> y; points >> z;
             point_cloud.emplace_back(x, y, z);
         }
-        RansacPlaneFitter planeFitter;
+//        RansacPlaneFitter planeFitter;
+        HoughTransformPlaneFitter planeFitter;
         Plane3D plane = planeFitter.fit(point_cloud, p);
         plane.print();
         input.close();
